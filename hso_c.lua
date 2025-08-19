@@ -75,7 +75,7 @@ addEventHandler("onClientRender", root,
 
         if not getPedOccupiedVehicle(localPlayer) and not isPushing then
             local nearestVeh = getNearestVehicleClient(localPlayer, 4)
-            if isElement(nearestVeh) and getVehicleType(nearestVeh) == "Automobile" and not getElementData(nearestVeh, "engineState") then
+            if isElement(nearestVeh) and getVehicleType(nearestVeh) == "Automobile" and not getVehicleEngineState(nearestVeh) then
                 local matrix = getElementMatrix(nearestVeh)
                 local offX, offY, offZ = 0, -2.1, 0.7 
                 local worldX = matrix[4][1] + matrix[1][1]*offX + matrix[2][1]*offY + matrix[3][1]*offZ
@@ -94,11 +94,3 @@ addEventHandler("onClientRender", root,
         end
     end
 )
-
-setTimer(function()
-    for _, vehicle in ipairs(getElementsByType("vehicle", localPlayer, true)) do
-        if getElementData(vehicle, "engineState") == nil then
-            triggerServerEvent("VehiclePush:syncEngineState", vehicle)
-        end
-    end
-end, 2000, 0)
