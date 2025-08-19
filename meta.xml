@@ -1,0 +1,7 @@
+<meta>
+    <info name="Push Car" author="Hso" version="1.0" type="script" />
+    <script src="hso_c.lua" type="client" cache="false" />
+    <script src="hso_s.lua" type="server"/>
+	<file src="push.ifp"/>
+    <min_mta_version client="1.5.4-9.11413"/>
+</meta>
