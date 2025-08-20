@@ -1,93 +1,104 @@
-
 -- by Hussein Ali 
-Hussein = "n"
 
-local pushSpeed = 0.04
-local turnSpeed = 0.5
-local playerAttachOffset = {0, -3.2, 0.3}
+hso = {}
 
-function handlePushKey(key, keyState)
-    local player = client
-    if key ~= Hussein then return end
+hso.settings = {
+    key = "n",
+    speed = 0.04,
+    turnSpeed = 0.5,
+    turnInterval = 50,
+    attachOffset = {0, -3.2, 0.3},
+    cooldown = 2000
+}
 
-    if keyState == "down" then
-        if getElementData(player, "isPushingVehicle") then
-            stopPushingVehicle(player)
-        else
-            local vehicle = getNearestVehicle(player, 4)
-            if vehicle and getElementType(vehicle) == "vehicle" and not getVehicleEngineState(vehicle) and not getPedOccupiedVehicle(player) then
-                attachElements(player, vehicle, playerAttachOffset[1], playerAttachOffset[2], playerAttachOffset[3])
-                setElementData(player, "isPushingVehicle", vehicle)
-                
-                local pushTimer = setTimer(function(p, v)
-                    if not isElement(p) or not isElement(v) then
-                        if isTimer(getElementData(p, "pushingVehicleTimer")) then
-                            stopPushingVehicle(p)
-                        end
-                        return
-                    end
+hso.pushingData = {}
+hso.pushCooldowns = {}
 
-                    local rx, ry, rz = getElementRotation(v)
-                    local velX = -math.sin(math.rad(rz)) * pushSpeed
-                    local velY = math.cos(math.rad(rz)) * pushSpeed
-                    setElementVelocity(v, velX, velY, 0)
-                    
-                end, 50, 0, player, vehicle)
-                setElementData(player, "pushingVehicleTimer", pushTimer)
-                triggerClientEvent(getRootElement(), "VehiclePush:updateAnim", getRootElement(), getPlayerName(player), true)
-            end
+function hso.startPushing(player, vehicle)
+    if not isElement(player) or not isElement(vehicle) then return end
+    attachElements(player, vehicle, hso.settings.attachOffset[1], hso.settings.attachOffset[2], hso.settings.attachOffset[3])
+
+    local pushTimer = setTimer(function(p, v)
+        if not isElement(p) or not isElement(v) or not hso.pushingData[p] then
+            hso.stopPushing(p)
+            return
+        end
+        local rx, ry, rz = getElementRotation(v)
+        local velX = -math.sin(math.rad(rz)) * hso.settings.speed
+        local velY = math.cos(math.rad(rz)) * hso.settings.speed
+        setElementVelocity(v, velX, velY, 0)
+    end, 50, 0, player, vehicle)
+    
+    hso.pushingData[player] = {
+        vehicle = vehicle,
+        pushTimer = pushTimer,
+        turnTimer = nil,
+        turnDirection = nil
+    }
+    triggerClientEvent(getRootElement(), "VehiclePush:updateAnim", getRootElement(), getPlayerName(player), true)
+end
+
+function hso.stopPushing(player)
+    if not hso.pushingData[player] then return end
+    
+    local data = hso.pushingData[player]
+    if isTimer(data.pushTimer) then killTimer(data.pushTimer) end
+    if isTimer(data.turnTimer) then killTimer(data.turnTimer) end
+    
+    if isElement(player) and isElementAttached(player) then detachElements(player) end
+    if isElement(data.vehicle) then setElementVelocity(data.vehicle, 0, 0, 0) end
+    
+    hso.pushingData[player] = nil
+    triggerClientEvent(getRootElement(), "VehiclePush:updateAnim", getRootElement(), getPlayerName(player), false)
+end
+
+function hso.handleKey() 
+    if hso.pushCooldowns[client] and getTickCount() - hso.pushCooldowns[client] < hso.settings.cooldown then
+        return
+    end
+    hso.pushCooldowns[client] = getTickCount()
+
+    if hso.pushingData[client] then
+        hso.stopPushing(client)
+    else
+        local vehicle = hso.getNearestVeh(client, 4)
+        if vehicle and not getVehicleEngineState(vehicle) and not getPedOccupiedVehicle(client) then
+            hso.startPushing(client, vehicle)
         end
     end
 end
 addEvent("VehiclePush:onKey", true)
-addEventHandler("VehiclePush:onKey", getRootElement(), handlePushKey)
+addEventHandler("VehiclePush:onKey", getRootElement(), hso.handleKey)
 
-function handleVehicleTurn(direction)
+function hso.handleTurn(direction, state)
     local player = client
-    if not getElementData(player, "isPushingVehicle") then return end
+    local data = hso.pushingData[player]
+    if not data or not isElement(data.vehicle) then return end
 
-    local vehicle = getElementData(player, "isPushingVehicle")
-    if vehicle and isElement(vehicle) then
-        local rx, ry, rz = getElementRotation(vehicle)
-        local newRz = rz
-
-        if direction == "left" then
-            newRz = rz + turnSpeed
-        elseif direction == "right" then
-            newRz = rz - turnSpeed
+    if state == "down" then
+        if isTimer(data.turnTimer) then killTimer(data.turnTimer) end
+        data.turnTimer = setTimer(function(p, v)
+            if not isElement(p) or not isElement(v) then return end
+            local rx, ry, rz = getElementRotation(v)
+            local newRz = rz
+            if data.turnDirection == "left" then newRz = rz + hso.settings.turnSpeed
+            elseif data.turnDirection == "right" then newRz = rz - hso.settings.turnSpeed end
+            setElementRotation(v, rx, ry, newRz)
+            setElementRotation(p, 0, 0, newRz)
+        end, hso.settings.turnInterval, 0, player, data.vehicle)
+        data.turnDirection = direction
+    elseif state == "up" then
+        if data.turnDirection == direction and isTimer(data.turnTimer) then
+            killTimer(data.turnTimer)
+            data.turnTimer = nil
+            data.turnDirection = nil
         end
-        
-        setElementRotation(vehicle, rx, ry, newRz)
-        setElementRotation(player, 0, 0, newRz) 
     end
 end
 addEvent("VehiclePush:onTurn", true)
-addEventHandler("VehiclePush:onTurn", getRootElement(), handleVehicleTurn)
+addEventHandler("VehiclePush:onTurn", getRootElement(), hso.handleTurn)
 
-
-function stopPushingVehicle(player)
-    local timer = getElementData(player, "pushingVehicleTimer")
-    if timer then
-        killTimer(timer)
-    end
-    local vehicle = getElementData(player, "isPushingVehicle")
-    if vehicle and isElement(vehicle) then
-        setElementVelocity(vehicle, 0, 0, 0)
-        if isElementAttached(player) then
-            detachElements(player)
-        end
-    end
-    
-    removeElementData(player, "isPushingVehicle")
-    removeElementData(player, "pushingVehicleTimer")
-    triggerClientEvent(getRootElement(), "VehiclePush:updateAnim", getRootElement(), getPlayerName(player), false)
-end
-
-addEventHandler("onPlayerQuit", getRootElement(), function()
-    stopPushingVehicle(source)
-end)
-
-function getNearestVehicle(player, maxDistance)
+function hso.getNearestVeh(player, maxDistance)
     local closestVehicle = false
     local shortestDistance = maxDistance + 1
     local pX, pY, pZ = getElementPosition(player)
@@ -101,3 +112,9 @@ function getNearestVehicle(player, maxDistance)
     end
     return closestVehicle
 end
+
+addEventHandler("onPlayerQuit", getRootElement(), function()
+    if hso.pushingData[source] then
+        hso.stopPushing(source)
+    end
+end)
