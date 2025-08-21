@@ -1,4 +1,3 @@
-
 -- by Hussein Ali 
 hso = {}
 
@@ -53,17 +52,10 @@ end)
 function hso.handleTurn(key, state)
     if not hso.isPushing then return end
     
-    local direction
-    if key == "a" then
-        direction = "left"
-    elseif key == "d" then
-        direction = "right"
-    else
-        return
-    end
+    local direction = (key == "a" and "left") or (key == "d" and "right")
+    if not direction then return end
     
     local isPressed = (state == "down")
-    
     if hso.turnState[direction] ~= isPressed then
         hso.turnState[direction] = isPressed
         triggerServerEvent("VehiclePush:onTurn", localPlayer, direction, state)
@@ -78,12 +70,29 @@ addEventHandler("onClientRender", root, function()
     local nearestVeh = hso.getNearestVeh(localPlayer, 4)
     if isElement(nearestVeh) and getVehicleType(nearestVeh) == "Automobile" and not getVehicleEngineState(nearestVeh) then
         local matrix = getElementMatrix(nearestVeh)
-        local offX, offY, offZ = 0, -2.1, 0.7 
-        local worldX = matrix[4][1] + matrix[1][1]*offX + matrix[2][1]*offY + matrix[3][1]*offZ
-        local worldY = matrix[4][2] + matrix[1][2]*offX + matrix[2][2]*offY + matrix[3][2]*offZ
-        local worldZ = matrix[4][3] + matrix[1][3]*offX + matrix[2][3]*offY + matrix[3][3]*offZ
-        local screenX, screenY = getScreenFromWorldPosition(worldX, worldY, worldZ)
-        
+        local px, py, pz = getElementPosition(localPlayer)
+
+        local offBackY = -2.1
+        local worldBackX = matrix[4][1] + matrix[2][1]*offBackY
+        local worldBackY = matrix[4][2] + matrix[2][2]*offBackY
+        local worldBackZ = matrix[4][3] + matrix[1][3]*0.7
+
+        local offFrontY = 2.1
+        local worldFrontX = matrix[4][1] + matrix[2][1]*offFrontY
+        local worldFrontY = matrix[4][2] + matrix[2][2]*offFrontY
+        local worldFrontZ = worldBackZ
+
+        local distToBack = getDistanceBetweenPoints3D(px, py, pz, worldBackX, worldBackY, worldBackZ)
+        local distToFront = getDistanceBetweenPoints3D(px, py, pz, worldFrontX, worldFrontY, worldFrontZ)
+
+        local targetX, targetY, targetZ
+        if distToFront < distToBack then
+            targetX, targetY, targetZ = worldFrontX, worldFrontY, worldFrontZ
+        else
+            targetX, targetY, targetZ = worldBackX, worldBackY, worldBackZ
+        end
+
+        local screenX, screenY = getScreenFromWorldPosition(targetX, targetY, targetZ)
         if screenX then
             local text = string.format(hso.textFormat, string.upper(hso.key))
             dxDrawText(text, screenX - 100, screenY - 20, screenX + 100, screenY + 20, tocolor(0, 0, 0, 220), 1.2, "default-bold", "center", "center", false, false, true, true)
@@ -93,15 +102,13 @@ addEventHandler("onClientRender", root, function()
 end)
 
 function hso.getNearestVeh(player, maxDistance)
-    local closestVehicle = false
-    local shortestDistance = maxDistance + 1
+    local closestVehicle, shortestDistance = false, maxDistance + 1
     local pX, pY, pZ = getElementPosition(player)
     for _, vehicle in ipairs(getElementsByType("vehicle")) do
         local vX, vY, vZ = getElementPosition(vehicle)
         local currentDistance = getDistanceBetweenPoints3D(pX, pY, pZ, vX, vY, vZ)
-        if currentDistance <= maxDistance and currentDistance < shortestDistance then
-            closestVehicle = vehicle
-            shortestDistance = currentDistance
+        if currentDistance < shortestDistance then
+            closestVehicle, shortestDistance = vehicle, currentDistance
         end
     end
     return closestVehicle
